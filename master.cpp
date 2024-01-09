@@ -4,7 +4,7 @@
     #include <sstream>
     #include <fstream>
     #include <gdiplus.h>
-    #include <vector>
+    #include <vector>   
 
 
     using namespace Gdiplus;

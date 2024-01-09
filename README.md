@@ -20,6 +20,7 @@ How to use this system:
 Stuff left to do:
 1. run it in a headless format
 2. clip the buffer to only 5 minutes
-3. to prevent the irregular termination, need a pipelined system/ interrupt that when triggered, endd the current run and then exits the infinite loop thus ensuring that every stack i s perfectly indexed
+3. to prevent the irregular termination, need a pipelined system/ interrupt that when triggered, endd the current run and then exits the infinite loop thus ensuring that every stack is perfectly indexed
 4. add keyboard key strokes extraction system
 5. probably some other metadata extraction module that is left over
+6. right now in the git pushes im also pushing the folders like meta, keyboard and screenshots, will remove these later. 
