@@ -1,9 +1,10 @@
 # depslib dependency file v1.0
-1699110057 source:c:\my files\git\github\snmeta\snmetaa\main.cpp
+1705592399 source:c:\my files\git\github\snmeta\snmetaa\main.cpp
 	<windows.h>
 	<iostream>
 	<string>
 	<sstream>
 	<fstream>
 	<gdiplus.h>
+	<vector>
 

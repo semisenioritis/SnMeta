@@ -1,12 +1,16 @@
-    #include <windows.h>
-    #include <iostream>
-    #include <string>
-    #include <sstream>
-    #include <fstream>
-    #include <gdiplus.h>
-    #include <vector>
+#include <windows.h>
+#include <iostream>
+#include <string>
+#include <sstream>
+#include <fstream>
+#include <gdiplus.h>
+#include <vector>
+#include <thread>
+#include <mutex>
 
-
+int keyPressed(int key){
+    return (GetAsyncKeyState(key) & 0x8000 != 0);
+}
     using namespace Gdiplus;
     using namespace std;
 
@@ -17,10 +21,9 @@
 
     bool SaveHBITMAPToJPEG(HBITMAP hBitmap, const wchar_t* filename);
     int GetEncoderClsid(const wchar_t* format, CLSID* pClsid);
-
-
-
-
+    // 🔴🔴🔴 what are these deffinitions
+    // 🔴🔴🔴 are the declarations or library calls?
+    
 
 
     Coordinates GetCursorLocation() {
@@ -40,141 +43,107 @@
 
 
 
+std::mutex globalMutex;
+int screenshotCounter = 0;
 
-    // Function to list all open windows
-    BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam) {
-        if (IsWindowVisible(hwnd)) {
-            char windowTitle[256];
-            GetWindowTextA(hwnd, windowTitle, sizeof(windowTitle));
-            if (strlen(windowTitle) > 0) {
-                cout << "Window Title: " << windowTitle << endl;
-                vector<HWND>* windows = reinterpret_cast<vector<HWND>*>(lParam);
-                windows->push_back(hwnd);
-            }
-        }
-        return TRUE;
+
+int screenshotIntervalMs = 1250; // 4 screenshots per second (1000 ms / 4)
+
+int buffer_size = 10; // make this 1000 later
+
+int GetEncoderClsid(const wchar_t* format, CLSID* pClsid) {
+    UINT num = 0;           // Number of image encoders
+    UINT size = 0;          // Size of the image encoder array in bytes
+
+    Gdiplus::GetImageEncodersSize(&num, &size);
+    if (size == 0) {
+        return -1;  // Failure
     }
 
-    void ListOpenWindows() {
-        vector<HWND> windows;
-        EnumWindows(EnumWindowsProc, reinterpret_cast<LPARAM>(&windows));
+    Gdiplus::ImageCodecInfo* pImageCodecInfo = (Gdiplus::ImageCodecInfo*)(malloc(size));
+    if (pImageCodecInfo == NULL) {
+        return -1;  // Failure
     }
 
-    // Function to get the active window
-    void GetActiveWindowInfo() {
-        HWND activeWindow = GetForegroundWindow();
-        char windowTitle[256];
-        GetWindowTextA(activeWindow, windowTitle, sizeof(windowTitle));
-        cout << "Active Window: " << windowTitle << endl;
+    Gdiplus::GetImageEncoders(num, size, pImageCodecInfo);
+
+    for (UINT j = 0; j < num; ++j) {
+        if (wcscmp(pImageCodecInfo[j].MimeType, format) == 0) {
+            *pClsid = pImageCodecInfo[j].Clsid;
+            free(pImageCodecInfo);
+            return j;  // Success
+        }
     }
 
-    int main() {
-        int screenshotIntervalMs = 250; // 4 screenshots per second (1000 ms / 4)
-        int screenshotCounter = 0;
-        int buffer_size = 10; // make this 1000 later
+    free(pImageCodecInfo);
+    return -1;  // Failure
+}
 
-        // Get the path to the executable
-        wchar_t exePath[MAX_PATH];
-        GetModuleFileNameW(NULL, exePath, MAX_PATH);
+bool SaveHBITMAPToJPEG(HBITMAP hBitmap, const wchar_t* filename) {
+    Gdiplus::Bitmap bitmap(hBitmap, NULL);
 
-        // Extract the directory path
-        std::wstring directory = exePath;
-        size_t lastBackslash = directory.find_last_of(L"\\");
-        if (lastBackslash != std::wstring::npos) {
-            directory = directory.substr(0, lastBackslash + 1);
-        }
+    CLSID clsid;
+    if (GetEncoderClsid(L"image/jpeg", &clsid) == -1) { // Changed format to JPEG
+        return false;
+    }
 
-        // Construct the full path to the "currloc" directory
-        std::wstring currloc = directory + L"Counter_location";
+    EncoderParameters encoderParams;
+    encoderParams.Count = 1;
+    encoderParams.Parameter[0].Guid = EncoderQuality;
+    encoderParams.Parameter[0].Type = EncoderParameterValueTypeLong;
+    encoderParams.Parameter[0].NumberOfValues = 1;
+    ULONG quality = 95; // Adjust JPEG quality here (0-100)
+    encoderParams.Parameter[0].Value = &quality;
 
-        // Delete the directory if it exists
-        if (RemoveDirectoryW(currloc.c_str())) {
-
-        }
-
-        // Create a new "Screenshots" directory next to the executable
-        if (!CreateDirectoryW(currloc.c_str(), NULL)) {
-            std::wcerr << L"Failed to create the currloc directory." << std::endl;
-            return 1;
-        }
-
-
-        // Construct the full path to the "Screenshots" directory
-        std::wstring screenshotsDir = directory + L"Screenshots";
-
-        // Delete the directory if it exists
-        if (RemoveDirectoryW(screenshotsDir.c_str())) {
-
-        }
-
-        // Create a new "Screenshots" directory next to the executable
-        if (!CreateDirectoryW(screenshotsDir.c_str(), NULL)) {
-            std::wcerr << L"Failed to create the scr directory." << std::endl;
-            return 1;
-        }
-
-
-
-        // Construct the full path to the "Meta" directory
-        std::wstring metaDir = directory + L"Meta";
-
-        // Delete the directory if it exists
-        if (RemoveDirectoryW(metaDir.c_str())) {
-
-        }
-
-        // Create a new "Screenshots" directory next to the executable
-        if (!CreateDirectoryW(metaDir.c_str(), NULL)) {
-            std::wcerr << L"Failed to create the meta directory." << std::endl;
-            return 1;
-        }
-
-
-        // Construct the full path to the "keyip" directory
-        std::wstring keyipDir = directory + L"Keyboard";
-
-        // Delete the directory if it exists
-        if (RemoveDirectoryW(keyipDir.c_str())) {
-
-        }
-
-        // Create a new "Screenshots" directory next to the executable
-        if (!CreateDirectoryW(keyipDir.c_str(), NULL)) {
-            std::wcerr << L"Failed to create the keyip directory." << std::endl;
-            return 1;
-        }
+    return bitmap.Save(filename, &clsid, &encoderParams) == Gdiplus::Ok;
+}
 
 
 
 
 
+void loop1() {
 
-
-        // Initialize GDI+
-        GdiplusStartupInput gdiplusStartupInput;
-        ULONG_PTR gdiplusToken;
-        GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
-
-        int recieved_screenWidth = GetSystemMetrics(SM_CXSCREEN); // Get the screen width
-        int recieved_screenHeight = GetSystemMetrics(SM_CYSCREEN); // Get the screen height
-
-        while (true) {
-            // Capture the screen
-
+    int recieved_screenWidth = GetSystemMetrics(SM_CXSCREEN); // Get the screen width
+    int recieved_screenHeight = GetSystemMetrics(SM_CYSCREEN); // Get the screen height
+    while (true) {
+        int localscreenshotCounter;
+        {
+            std::lock_guard<std::mutex> lock(globalMutex);
+            // Access and read the shared variable
             screenshotCounter++;
             screenshotCounter = screenshotCounter % buffer_size;
 
-
-
             {
-            ofstream fout("Counter_location\\counter.txt");
-            fout<<screenshotCounter<<endl;
+                std::ofstream fout("Counter_location\\counter.txt");
+                fout<<screenshotCounter;
+                fout.close();
             }
+            
+            localscreenshotCounter = screenshotCounter;
+            
+        }
+        // Other code for the first loop
+        // 🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩
+
+
+            std::string pathreset = "Keyboard/";
+            std::string clickfilename = "click_" + std::to_string(localscreenshotCounter) + ".txt";
+            std::ofstream fileclick(pathreset + clickfilename);
+
+            if(fileclick.is_open())
+                {
+                    fileclick << "0";
+                }
+
+            fileclick.close();
+
+            // Capture the screen
 
 
             // =============================================================================
             // This is the chunk for image extraction
-            // 🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴
+            // 🟡🟡🟡🟡🟡🟡🟡🟡🟡🟡
             // =============================================================================
 
             HDC hdcScreen = GetDC(NULL);
@@ -185,9 +154,13 @@
             HBITMAP hOldBitmap = (HBITMAP)SelectObject(hdcMem, hBitmap);
             BitBlt(hdcMem, 0, 0, screenWidth, screenHeight, hdcScreen, 0, 0, SRCCOPY);
 
+
+            // 🔴🔴🔴 here im saving the file with a jpeg extension but is it actually just a bitmap image that im renaming and not remorphing?
+            // 🔴🔴🔴 thing is that maybe it might be wasting a lot of space because of this
+
             // Generate a unique filename for each screenshot
             std::wstringstream wss;
-            wss << L"Screenshots\\scrsh_" << screenshotCounter << L".jpeg"; // Changed file extension to .jpeg
+            wss << L"Screenshots\\scrsh_" << localscreenshotCounter << L".jpeg"; // Changed file extension to .jpeg
             std::wstring filename = wss.str();
 
             // Save the screenshot as a JPEG file
@@ -205,7 +178,7 @@
             ReleaseDC(NULL, hdcScreen);
 
             // =============================================================================
-            // 🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴
+            // 🟡🟡🟡🟡🟡🟡🟡🟡🟡🟡
             // =============================================================================
 
             // =============================================================================
@@ -213,24 +186,22 @@
             // 🟠🟠🟠🟠🟠🟠🟠🟠🟠🟠
             // =============================================================================
 
-            // Create an array of strings
-            std::vector<std::string> stringArray = {"apple", "banana", "cherry", "date" };
-            const int size = 4;
-            {
-            ofstream fout("Counter_location\\temp.txt");
-
-            if(fout.is_open())
-                {
-                for(int i = 0; i <size; i++)
-                {
-                    fout << stringArray[i];
-                    fout << "\n";
-                }
-                fout << "=============================\n";
-                }
-
-            fout.close();
-            }
+            // // Create an array of strings
+                // std::vector<std::string> stringArray = {"apple", "banana", "cherry", "date" };
+                // const int size = 4;
+                // {
+                // ofstream fout("Counter_location\\temp.txt");
+                // if(fout.is_open())
+                //     {
+                //     for(int i = 0; i <size; i++)
+                //     {
+                //         fout << stringArray[i];
+                //         fout << "\n";
+                //     }
+                //     fout << "=============================\n";
+                //     }
+                // fout.close();
+                // }
 
             // Get cursor location
 
@@ -245,18 +216,20 @@
                 std::cout << "Failed to get cursor location." << std::endl;
             }
 
-            // // Construct a different filename for the second file
-            // wss.str(L""); // Clear the stringstream
-            // wss << L"Screenshots\\newfile-" << screenshotCounter << L".txt"; // Use a different name
-            // std::wstring newFilename = wss.str();
 
-            // // Open the second file for writing in append mode using wfstream
-            // std::wfstream newFout;
-            // newFout.open(newFilename.c_str(), std::ios::out | std::ios::app); // Open in append mode
+            // 🔵🔵🔵 Working window extraction code!
+            HWND hwnd = GetForegroundWindow();
+            char windowTitle[256];
 
+            if (hwnd != NULL) {
+                GetWindowText(hwnd, windowTitle, sizeof(windowTitle));
+                std::cout << "Active Window Title: " << windowTitle << std::endl;
+            } else {
+                std::cerr << "Failed to get active window." << std::endl;
+            } 
 
             std::string path = "Meta/";
-            std::string metafilename = "metadata_" + std::to_string(screenshotCounter) + ".txt";
+            std::string metafilename = "metadata_" + std::to_string(localscreenshotCounter) + ".txt";
             std::ofstream file(path + metafilename);
 
 
@@ -264,26 +237,23 @@
             if(file.is_open())
                 {
 
-                {
-                    file << new_x_coord;
+                    {
+                        file << new_x_coord;
+                        file << "\n";
+                    }
+                    {
+                        file << new_y_coord;
+                        file << "\n";
+                    }
+                    file << "=_=_=_=_=_=_=_=_=_=\n";
+
+                    file << "Active Windows:";
                     file << "\n";
-                }
-                {
-                    file << new_y_coord;
-                    file << "\n";
-                }
-                file << "=_=_=_=_=_=_=_=_=_=\n";
+                    file << windowTitle ;
+
                 }
 
             file.close();
-
-
-
-            // // List open windows
-            // ListOpenWindows();
-
-            // // Get the active window
-            // GetActiveWindowInfo();
 
 
 
@@ -293,57 +263,96 @@
 
             // Sleep for the specified interval
             Sleep(screenshotIntervalMs);
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // 🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩
+    }
+}
+
+void loop2() {
+    while (true) {
+        int localscreenshotCounter2;
+        int localscreenshotCounter3;
+        {
+            std::lock_guard<std::mutex> lock(globalMutex);
+            // Access and read the shared variable
+            localscreenshotCounter2 = screenshotCounter;
         }
 
-        // Shutdown GDI+
-        GdiplusShutdown(gdiplusToken);
+        if(keyPressed(VK_LBUTTON)){
+            std::cout << "🟩🟩🟩🟩🟩🟩🟩 Click has been detected." << std::endl;
+            localscreenshotCounter3 = localscreenshotCounter2 - 1;
+            localscreenshotCounter3 = localscreenshotCounter3 % buffer_size;
 
-        return 0;
+
+            std::string pathreset = "Keyboard/";
+            std::string clickfilename = "click_" + std::to_string(localscreenshotCounter3) + ".txt";
+            std::ofstream fileclick(pathreset + clickfilename);
+
+            if(fileclick.is_open())
+                {
+                    fileclick << "1";
+                }
+
+            fileclick.close();
+
+        }
+        // Other code for the second loop   
+        // Sleep(125);
+    }
+}
+
+int main() {
+
+    // 🔴🔴🔴 why do i need this?
+    // Get the path to the executable
+    wchar_t exePath[MAX_PATH];
+    GetModuleFileNameW(NULL, exePath, MAX_PATH);
+
+
+    // 🔴🔴🔴 is this basically extracting the current pwd?        
+    // Extract the directory path
+    std::wstring directory = exePath;
+    size_t lastBackslash = directory.find_last_of(L"\\");
+    if (lastBackslash != std::wstring::npos) {
+        directory = directory.substr(0, lastBackslash + 1);
     }
 
-    bool SaveHBITMAPToJPEG(HBITMAP hBitmap, const wchar_t* filename) {
-        Gdiplus::Bitmap bitmap(hBitmap, NULL);
 
-        CLSID clsid;
-        if (GetEncoderClsid(L"image/jpeg", &clsid) == -1) { // Changed format to JPEG
-            return false;
-        }
 
-        EncoderParameters encoderParams;
-        encoderParams.Count = 1;
-        encoderParams.Parameter[0].Guid = EncoderQuality;
-        encoderParams.Parameter[0].Type = EncoderParameterValueTypeLong;
-        encoderParams.Parameter[0].NumberOfValues = 1;
-        ULONG quality = 95; // Adjust JPEG quality here (0-100)
-        encoderParams.Parameter[0].Value = &quality;
+    // 🔴🔴🔴 What is the GDI+ library? 
+    // Initialize GDI+
+    GdiplusStartupInput gdiplusStartupInput;
+    ULONG_PTR gdiplusToken;
+    GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
 
-        return bitmap.Save(filename, &clsid, &encoderParams) == Gdiplus::Ok;
-    }
 
-    int GetEncoderClsid(const wchar_t* format, CLSID* pClsid) {
-        UINT num = 0;           // Number of image encoders
-        UINT size = 0;          // Size of the image encoder array in bytes
+    // std::cout << recieved_screenWidth << std::endl;
+    // std::cout << recieved_screenHeight << std::endl;
+    // 🟣🟣🟣 Turns out the metrics that it is seeing is 1280*720
 
-        Gdiplus::GetImageEncodersSize(&num, &size);
-        if (size == 0) {
-            return -1;  // Failure
-        }
 
-        Gdiplus::ImageCodecInfo* pImageCodecInfo = (Gdiplus::ImageCodecInfo*)(malloc(size));
-        if (pImageCodecInfo == NULL) {
-            return -1;  // Failure
-        }
 
-        Gdiplus::GetImageEncoders(num, size, pImageCodecInfo);
+    std::thread t1(loop1);
+    std::thread t2(loop2);
 
-        for (UINT j = 0; j < num; ++j) {
-            if (wcscmp(pImageCodecInfo[j].MimeType, format) == 0) {
-                *pClsid = pImageCodecInfo[j].Clsid;
-                free(pImageCodecInfo);
-                return j;  // Success
-            }
-        }
+    t1.join();
+    t2.join();
 
-        free(pImageCodecInfo);
-        return -1;  // Failure
-    }
+    // Shutdown GDI+
+    GdiplusShutdown(gdiplusToken);
+    return 0;
+}
+

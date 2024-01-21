@@ -1,3 +1,5 @@
-1501
-177
+1518
+25
 =_=_=_=_=_=_=_=_=_=
+Active Windows:
+main.cpp [SnMetaa] - Code::Blocks 20.03

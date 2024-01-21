@@ -8,6 +8,10 @@ g++ master.cpp -o master.exe -lgdi32 -lgdiplus
 
 How to use this system:
 1. use codeblocks
+    1. Open SnMetaa.cbp
+    2. Build the file
+    3. Run the built file
+    4. the final file (.exe) we need is in (pwd)/bin/Debug/SnMetaa.exe
 2. snmeta is the folder that has been synchronized with git
 3. snmetaa is the folder that actually contains all the code.
 4. run main.cpp
@@ -19,8 +23,35 @@ How to use this system:
 
 Stuff left to do:
 1. run it in a headless format
-2. clip the buffer to only 5 minutes
+2. clip the buffer to only 100 screenshots
 3. to prevent the irregular termination, need a pipelined system/ interrupt that when triggered, endd the current run and then exits the infinite loop thus ensuring that every stack is perfectly indexed
 4. add keyboard key strokes extraction system
 5. probably some other metadata extraction module that is left over
 6. right now in the git pushes im also pushing the folders like meta, keyboard and screenshots, will remove these later. 
+7. system to identify when the user is clicking
+
+Structure of code:
+
+DONE go through all red
+DONE active window name
+DONE two parallel threads
+DONE how to detect a click in a loop
+
+
+THREADS
+make counter_location a global variable
+
+1.
+while true
+	counter_location increment
+	reset click_check of (n) to 0
+	screenshot
+	extract active window name
+	extract mouse location
+	timeout 0.25
+
+
+2.
+while true
+	if click 
+		modify click_check of (n-1) to 1

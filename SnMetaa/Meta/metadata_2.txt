@@ -1,3 +1,5 @@
-1504
-177
+1518
+25
 =_=_=_=_=_=_=_=_=_=
+Active Windows:
+"C:\My Files\git\Github\Screenshot (Intelli-assist)\SnMetaa\bin\Debug\SnMetaa.exe" 
